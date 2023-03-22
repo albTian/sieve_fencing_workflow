@@ -8,7 +8,7 @@ import sieve
     ],
     system_packages=[],
     python_version="3.8",
-    persist_output=True
+    # persist_output=True
 )
 def YouTubeDownloader(url: str) -> sieve.Video:
     from pytube import YouTube
@@ -19,6 +19,4 @@ def YouTubeDownloader(url: str) -> sieve.Video:
         return
     
     dl_path = yt.streams.get_by_resolution("360p").download(filename="test.mp4")
-    print("dl_path")
-    print(dl_path)
     return sieve.Video(path=dl_path)
