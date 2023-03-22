@@ -120,6 +120,8 @@ class EstimatePose:
 
         cap.release()
         result_vid = sieve.Video(path=output_file_h264)
+        print("annotated video:")
+        print(video)
         result_vids.append(result_vid)
 
     for vid in result_vids:
