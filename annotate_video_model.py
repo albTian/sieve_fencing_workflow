@@ -78,6 +78,7 @@ class EstimatePose:
         os.makedirs(output_path)
 
     result_vids = []
+    count = 0
     for video in videos:
         cap = video.cap
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -105,8 +106,9 @@ class EstimatePose:
             annotated_frames.append(frame)
 
         # Create a VideoWriter object for the output video
-        output_file = f"{output_path}temp.mp4"
-        output_file_h264 = f"{output_path}test.mp4"
+        count += 1
+        output_file = f"{output_path}temp-{count}.mp4"
+        output_file_h264 = f"{output_path}test-{count}.mp4"
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         writer = cv2.VideoWriter(output_file, fourcc, fps, (width, height))
         # Write the frames to the output video
