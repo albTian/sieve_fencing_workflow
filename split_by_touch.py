@@ -106,6 +106,7 @@ def SplitVideoByTouch(video: sieve.Video) -> sieve.Video:
         fps = cap.get(cv2.CAP_PROP_FPS)
 
         output_file = f"{output_path}test-{clip_num}[{left_score}-{right_score}].mp4"
+        output_file_h264 = f"{output_path}test-{clip_num}[{left_score}-{right_score}]-h264.mp4"
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         writer = cv2.VideoWriter(output_file, fourcc, fps, (width, height))
 
@@ -116,8 +117,8 @@ def SplitVideoByTouch(video: sieve.Video) -> sieve.Video:
         # Release the output video
         writer.release()
         cap.set(1, old_pos)    # reset the position (so before/after this function is the same)
-        sv_vid = sieve.Video(path=output_file)
-        # print(f"output_file: {output_file}, frames: {sv_vid.frame_count}")
+        os.system(f"ffmpeg -i {output_file} -vcodec libx264 -f mp4 {output_file_h264}")     # convert so its viewable in browser
+        sv_vid = sieve.Video(path=output_file_h264)
         return sv_vid
 
     # setup utils (?)
