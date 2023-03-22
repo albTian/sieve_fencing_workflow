@@ -11,7 +11,7 @@ from typing import List
     ],
     system_packages=["libgl1-mesa-glx", "libglib2.0-0", "ffmpeg"],
     python_version="3.8",
-    persist_output=True,
+    # persist_output=True,
     # this is actually so stupid but I don't want to use aws cli (would need to configure with private keys)
     # wget doesn't work to get all from /utils...
     run_commands=[
@@ -105,8 +105,8 @@ def SplitVideoByTouch(video: sieve.Video) -> sieve.Video:
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
 
-        output_file = f"{output_path}test-{clip_num}[{left_score}-{right_score}].mp4"
-        output_file_h264 = f"{output_path}test-{clip_num}[{left_score}-{right_score}]-h264.mp4"
+        output_file = f"{output_path}temp-{clip_num}[{left_score}-{right_score}].mp4"
+        output_file_h264 = f"{output_path}test-{clip_num}[{left_score}-{right_score}].mp4"
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         writer = cv2.VideoWriter(output_file, fourcc, fps, (width, height))
 
@@ -118,8 +118,7 @@ def SplitVideoByTouch(video: sieve.Video) -> sieve.Video:
         writer.release()
         cap.set(1, old_pos)    # reset the position (so before/after this function is the same)
         os.system(f"ffmpeg -i {output_file} -vcodec libx264 -f mp4 {output_file_h264}")     # convert so its viewable in browser
-        sv_vid = sieve.Video(path=output_file_h264)
-        return sv_vid
+        return sieve.Video(path=output_file_h264)
 
     # setup utils (?)
     green_box = cv2.imread("/root/utils/greenbox.png")
@@ -191,4 +190,6 @@ def SplitVideoByTouch(video: sieve.Video) -> sieve.Video:
     cap.release()
     return result_vids[0]
 
-    # upload to s3
+    # return videos for annotation
+    # for vid in result_vids:
+    #     yield vid
