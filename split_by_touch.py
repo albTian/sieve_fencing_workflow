@@ -1,6 +1,60 @@
 import sieve
 from typing import List
+import numpy as np
+import cv2
+import os
 
+# helper functions (can I define these outside of this func?)
+def compare_pics(reference, tester):
+    return np.sum(abs(reference - tester))
+
+def score(pics, frame):
+    min_diff = 100000
+    score = -1
+    for i in range(16):
+        if i < 0 or i > 15:
+            continue
+        test_pic = pics[i]
+        diff = compare_pics(frame, test_pic)
+        if diff < min_diff:
+            min_diff = diff
+            score = i
+    
+    return score
+
+# starting at POSITION, record LENGTH frames.
+# cap will maintain its position before/after this call
+def record_touch(cap, position, length, clip_num, left_score, right_score, output_path) -> sieve.Video:
+    old_pos = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+    cap.set(1, position)
+
+    # Collect frames
+    frames = []
+    for _ in range(length):
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frames.append(frame)
+
+    # Create a VideoWriter object for the output video
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+
+    output_file = f"{output_path}temp-{clip_num}[{left_score}-{right_score}].mp4"
+    output_file_h264 = f"{output_path}test-{clip_num}[{left_score}-{right_score}].mp4"
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(output_file, fourcc, fps, (width, height))
+
+    # Write the frames to the output video
+    for frame in frames:
+        writer.write(frame)
+
+    # Release the output video
+    writer.release()
+    cap.set(1, old_pos)    # reset the position (so before/after this function is the same)
+    os.system(f"ffmpeg -i {output_file} -vcodec libx264 -f mp4 {output_file_h264}")     # convert so its viewable in browser
+    return sieve.Video(path=output_file_h264)
 
 @sieve.function(
     name="split-video-by-touch",
@@ -12,8 +66,9 @@ from typing import List
     system_packages=["libgl1-mesa-glx", "libglib2.0-0", "ffmpeg"],
     python_version="3.8",
     # persist_output=True,
+
     # this is actually so stupid but I don't want to use aws cli (would need to configure with private keys)
-    # wget doesn't work to get all from /utils...
+    # wget doesn't work to get all from /utils... its blocked
     run_commands=[
         "mkdir /root/utils",
         # left and right boxes
@@ -68,59 +123,7 @@ def SplitVideoByTouch(video: sieve.Video) -> sieve.Video:
     if not os.path.exists(output_path):
         os.makedirs(output_path)
 
-    # helper functions (can I define these outside of this func?)
-    def compare_pics(reference, tester):
-        return np.sum(abs(reference - tester))
-
-    def score(pics, frame):
-        min_diff = 100000
-        score = -1
-        for i in range(16):
-            if i < 0 or i > 15:
-                continue
-            test_pic = pics[i]
-            diff = compare_pics(frame, test_pic)
-            if diff < min_diff:
-                min_diff = diff
-                score = i
-        
-        return score
-
-    # starting at POSITION, record LENGTH frames.
-    # cap will maintain its position before/after this call
-    def record_touch(cap, position, length, clip_num, left_score, right_score) -> sieve.Video:
-        old_pos = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-        cap.set(1, position)
-
-        # Collect frames
-        frames = []
-        for _ in range(length):
-            ret, frame = cap.read()
-            if not ret:
-                break
-            frames.append(frame)
-
-        # Create a VideoWriter object for the output video
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-
-        output_file = f"{output_path}temp-{clip_num}[{left_score}-{right_score}].mp4"
-        output_file_h264 = f"{output_path}test-{clip_num}[{left_score}-{right_score}].mp4"
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        writer = cv2.VideoWriter(output_file, fourcc, fps, (width, height))
-
-        # Write the frames to the output video
-        for frame in frames:
-            writer.write(frame)
-
-        # Release the output video
-        writer.release()
-        cap.set(1, old_pos)    # reset the position (so before/after this function is the same)
-        os.system(f"ffmpeg -i {output_file} -vcodec libx264 -f mp4 {output_file_h264}")     # convert so its viewable in browser
-        return sieve.Video(path=output_file_h264)
-
-    # setup utils (?)
+    # setup utils
     green_box = cv2.imread("/root/utils/greenbox.png")
     red_box = cv2.imread("/root/utils/redbox.png")
     green_box_int = green_box.astype(int)
@@ -133,7 +136,7 @@ def SplitVideoByTouch(video: sieve.Video) -> sieve.Video:
     clips_recorded = 0
     position, position_skip = 360, True     # skip the beginning, nothing happening
 
-    cap = video.cap     # cap is a property, not a getter function
+    cap = video.cap
     cap_end_point = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap_end_point -= 260    # ensures videos don't overrun
     left_score = right_score = left_score_last = right_score_last = 0
@@ -176,7 +179,7 @@ def SplitVideoByTouch(video: sieve.Video) -> sieve.Video:
                 left_score_last, right_score_last = left_score, right_score
             
             # record 60 frames before, 30 frames after (90 total)
-            touch_vid = record_touch(cap, position-60, 90, clips_recorded, left_score, right_score)
+            touch_vid = record_touch(cap, position-60, 90, clips_recorded, left_score, right_score, output_path)
             print(touch_vid)
             result_vids.append(touch_vid)
             clips_recorded += 1
@@ -188,8 +191,7 @@ def SplitVideoByTouch(video: sieve.Video) -> sieve.Video:
         # print(position)
     # record a touch of length from an open cap at position
     cap.release()
-    return result_vids[0]
 
     # return videos for annotation
-    # for vid in result_vids:
-    #     yield vid
+    for vid in result_vids:
+        yield vid

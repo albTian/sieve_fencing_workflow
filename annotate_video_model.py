@@ -1,6 +1,7 @@
 import sieve
 import cv2
 import numpy as np
+from typing import List
 
 def loop_through_people(frame, keypoints_with_scores, edges, confidence_threshold):
     for person in keypoints_with_scores:
@@ -58,7 +59,8 @@ EDGES = {
   ],
   system_packages=["libgl1-mesa-glx", "libglib2.0-0", "ffmpeg"],
   python_version="3.8",
-  persist_output=True
+  persist_output=True,
+  iterator_input=True
 )
 class EstimatePose:
   def __setup__(self):
@@ -67,7 +69,7 @@ class EstimatePose:
     movenet = hub.load("https://tfhub.dev/google/movenet/multipose/lightning/1")
     self.model = movenet.signatures['serving_default']
 
-  def __predict__(self, video: sieve.Video) -> sieve.Video:
+  def __predict__(self, videos: sieve.Video) -> sieve.Video:
     import os
     import tensorflow as tf
 
@@ -75,43 +77,48 @@ class EstimatePose:
     if not os.path.exists(output_path):
         os.makedirs(output_path)
 
-    cap = video.cap
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    annotated_frames = []
-    while cap.isOpened():
-        ret, frame = cap.read()
+    result_vids = []
+    for video in videos:
+        cap = video.cap
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        annotated_frames = []
+        while cap.isOpened():
+            ret, frame = cap.read()
 
-        if frame is None:
-            break
-        
-        # Resize image
-        img = frame.copy()
-        img = tf.image.resize_with_pad(tf.expand_dims(img, axis=0), 384,640)
-        input_img = tf.cast(img, dtype=tf.int32)
-        
-        # Detection section
-        results = self.model(input_img)
-        keypoints_with_scores = results['output_0'].numpy()[:,:,:51].reshape((6,17,3))
-        
-        # Render keypoints 
-        loop_through_people(frame, keypoints_with_scores, EDGES, 0.4) #0.4 is our confidence_threshold
-        
-        annotated_frames.append(frame)
+            if frame is None:
+                break
+            
+            # Resize image
+            img = frame.copy()
+            img = tf.image.resize_with_pad(tf.expand_dims(img, axis=0), 384,640)
+            input_img = tf.cast(img, dtype=tf.int32)
+            
+            # Detection section
+            results = self.model(input_img)
+            keypoints_with_scores = results['output_0'].numpy()[:,:,:51].reshape((6,17,3))
+            
+            # Render keypoints 
+            loop_through_people(frame, keypoints_with_scores, EDGES, 0.4) #0.4 is our confidence_threshold
+            
+            annotated_frames.append(frame)
 
-    # Create a VideoWriter object for the output video
-    output_file = f"{output_path}temp.mp4"
-    output_file_h264 = f"{output_path}test.mp4"
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(output_file, fourcc, fps, (width, height))
-    # Write the frames to the output video
-    for frame in annotated_frames:
-        writer.write(frame)
-    # Release the output video
-    writer.release()
-    os.system(f"ffmpeg -i {output_file} -vcodec libx264 -f mp4 {output_file_h264}")     # convert so its viewable in browser
+        # Create a VideoWriter object for the output video
+        output_file = f"{output_path}temp.mp4"
+        output_file_h264 = f"{output_path}test.mp4"
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        writer = cv2.VideoWriter(output_file, fourcc, fps, (width, height))
+        # Write the frames to the output video
+        for frame in annotated_frames:
+            writer.write(frame)
+        # Release the output video
+        writer.release()
+        os.system(f"ffmpeg -i {output_file} -vcodec libx264 -f mp4 {output_file_h264}")     # convert so its viewable in browser
 
-    cap.release()
+        cap.release()
+        result_vid = sieve.Video(path=output_file_h264)
+        result_vids.append(result_vid)
 
-    return sieve.Video(path=output_file_h264)
+    for vid in result_vids:
+        yield vid
